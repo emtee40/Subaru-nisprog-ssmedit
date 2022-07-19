@@ -54,7 +54,9 @@ int cmd_flrom(int argc, char **argv);
 int cmd_npt(int argc, char **argv);
 
 // Subaru specific commands
+int cmd_spconn02fxt(int argc, char **argv);
 int cmd_spconn(int argc, char **argv);
+int cmd_sprunk02fxt(int argc, char **argv);
 int cmd_sprunkernel(int argc, char **argv);
 
 #endif
