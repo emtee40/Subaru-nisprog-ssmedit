@@ -196,6 +196,42 @@ int sub_sid27_unlock(){
 }
 
 
+/*
+ * For Subaru 02 FXT, use cmd 0x4D for security access.
+ *
+ * @return 0 if successful
+ */
+int sub_cmd4D_unlock(){
+	uint8_t txdata[64];	//data for nisreq
+	struct diag_msg nisreq={0};	//request to send
+	struct diag_msg *rxmsg=NULL;	//pointer to the reply
+	int errval;
+
+	txdata[0]=0x4D;
+	txdata[1]=0xFF;	
+	txdata[2]=0xB4;
+	nisreq.len=3;
+	nisreq.data=txdata;
+	rxmsg=diag_l2_request(global_l2_conn, &nisreq, &errval);
+	if (rxmsg==NULL)
+		return -1;
+	if ((rxmsg->len != 3) || (rxmsg->data[0] != 0x4D) || (rxmsg->data[1] != 0x00)|| (rxmsg->data[2] != 0xB3)) {
+		printf("got bad 4D response : ");
+		if (rxmsg->data[0] == 0x7F) {
+			printf("%s\n", decode_nrc(rxmsg->data));
+		} else {
+			diag_data_dump(stdout, rxmsg->data, rxmsg->len);
+			printf("\n");
+		}
+		diag_freemsg(rxmsg);
+		return -1;
+	}
+
+	diag_freemsg(rxmsg);
+	return 0;
+}
+
+
 /** For Subaru, generates key from seed
  * writes 4 bytes in buffer *key
  */
@@ -360,6 +396,84 @@ int sub_sid34_reqdownload(uint32_t dataaddr, uint32_t datalen) {
 	}
 
 	diag_freemsg(rxmsg);
+	return 0;
+}
+
+
+/* For Subaru 02 FXT, transfer payload from *buf
+ * len must be multiple of 4
+ * Caller must have encrypted the payload
+ * ret 0 if ok
+ */
+int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_t cks) {
+	uint8_t txdata[128], i;	//data for nisreq
+	struct diag_msg nisreq={0};	//request to send
+	struct diag_msg *rxmsg=NULL;	//pointer to the reply
+	int errval;
+	uint16_t blockno;
+	uint16_t maxblocks;
+
+	len &= ~0x03;
+	if (!buf || !len) return -1;
+
+	maxblocks = (len - 1) >> 7;  // number of 128 byte blocks - 1
+
+	txdata[0]=0x53;
+	txdata[1]=(uint8_t) (dataaddr >> 16) & 0xFF;
+	txdata[2]=(uint8_t) (dataaddr >> 8) & 0xFF;
+	txdata[3]=(uint8_t) ((len + 4) >> 16) & 0xFF;
+	txdata[4]=(uint8_t) ((len + 4) >> 8) & 0xFF;
+	txdata[5]=(uint8_t) (len + 4) & 0xFF;
+	txdata[6]=(0x00 + 0x10) ^ 0x55;  //this byte should become 0x00 after ECU de-encrypts it
+	txdata[8]=0x31;
+	txdata[9]=0x61;
+
+	for(i = 0; i < 10; i++) {
+		if (i != 7) cks = cks + txdata[i];
+	}
+
+	txdata[7]=(uint8_t) (0xFF - cks); //to ensure checksum of message incl encrypted data is 0
+
+	nisreq.data=txdata;
+	nisreq.len=10;
+	
+	rxmsg=diag_l2_request(global_l2_conn, &nisreq, &errval);
+	if(rxmsg->data[0]=0x53) {
+		printf("got bad cmd 0x53 response : ");
+		diag_data_dump(stdout, rxmsg->data, rxmsg->len);
+		printf("\n");
+		diag_freemsg(rxmsg);
+		return -1;
+	}
+
+	for (blockno = 0; blockno <= maxblocks; blockno++) {
+
+		if (blockno == maxblocks) {
+			memcpy(txdata, buf, len);
+			nisreq.len = len;
+		}
+		else {
+			memcpy(txdata, buf, 128);
+			nisreq.len= 128;
+			buf += 128;
+			len -= 128;
+		}
+
+		rxmsg=diag_l2_request(global_l2_conn, &nisreq, &errval);
+		if(rxmsg->data[0]=0x53) {
+			printf("got bad cmd 0x53 response : ");
+			diag_data_dump(stdout, rxmsg->data, rxmsg->len);
+			printf("\n");
+			diag_freemsg(rxmsg);
+			return -1;
+		}
+		
+		printf("\rcmd 0x53 block 0x%04X/0x%04X done",
+				(unsigned) blockno, (unsigned) maxblocks);
+
+	}
+
+	printf("\n");
 	return 0;
 }
 
