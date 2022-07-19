@@ -34,6 +34,14 @@ int sub_sid81_startcomms(void);
 int sub_sid27_unlock(void);
 
 
+/*
+ * For Subaru 02 FXT, use cmd 0x4D for security access.
+ *
+ * @return 0 if successful
+ */
+int sub_cmd4D_unlock(void);
+
+
 /** For Subaru, encrypts data for upload
  * writes 4 bytes in buffer *encrypteddata
  */
@@ -54,6 +62,14 @@ int sub_sid10_diagsession(void);
  * Ret 0 if successful
  */
 int sub_sid34_reqdownload(uint32_t dataaddr, uint32_t datalen);
+
+
+/* For Subaru 02 FXT, transfer payload from *buf
+ * len must be multiple of 4
+ * Caller must have encrypted the payload
+ * ret 0 if ok
+ */
+int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_t cks);
 
 
 /* transfer payload from *buf
