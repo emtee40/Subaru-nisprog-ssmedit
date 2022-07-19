@@ -126,3 +126,27 @@ SID 0x31 (startRoutineByLocalIdentifier)
   Checksum across addresses from immediately prior Cmd 0x34 must add to 0x5AA5
   Program execution jumps to function at 0xFFFF3004
   
+  
+Notes on Operation of Serial Interface on Subaru ECU SH7055 in the ~2002 era
+- does not have the UDS commands for loading / running a kernel (SIDs 0x81, 0x27, 0x34, 0x36, 0x31)
+- instead, during startup there is a routine to access serial comms bootloader for loading / running a kernel
+- to access the serial comms bootloader, the following needs to occur:
+	* Start with Line End Check 2 (LEC2) low. LEC2 is the bridged pin3/pin6 in the 'Line End Check Connector' which goes to what Subaru calls pin8 on the OBD port.
+	* Turn ignition to 'on'
+	* Provide sufficient time for ECU to reach the bootloader and reach at least 198ms in the bootloader (approx 500ms after ignition on)
+	* Pulse LEC2 to 'on' for 208-228ms (or for 670-730ms). After this, keep LEC2 low
+	* if these conditions are met, execution jumps into a SCI2 based bootloader
+	* ??? what pin conditions allow flashing while in car but not on bench ???
+	* Setting LEC2 high while in the bootloader will cause an ECU restart
+	
+Serial Comms Bootloader 
+	* Serial comms are established on SCI2 at 9600bps
+	* Access is granted with command 0x4D 0xFF 0xB4. Positive response is 0x4D 0x00 0xB3
+	* Kernel is loaded into RAM with command 0x53 0xA1 0xA2 0xL1 0xL2 0xL3 0xEB1 0xEB2 0x31 0x61 0xED1 0xED2 .... 0xEDn
+	* Kernel load address is 0xFF[A1][A2]00. It must be between 0xFFFF6000 and 0xFFFFDFFF. Loaded data starts at 0xEB1
+	* Kernel length is 0x[L1][L2][L3], length is counted from 0xEB1 as the first byte
+	* 0xEBx and 0xEDx are encrypted data which gets transformed by the ECU into unencrypted data 0xDx = 0xEDx ^ 0x55 + 0xF0. Note that 0x31 and 0x61 are not transformed. The encrypted data can be calculated from unencrypted data as per 0xEDx = (0xDx + 0x10) ^ 0x55.
+	* Checksum must equal 0 (checksum is simple byte summation of all bytes in entire command, checksum is calculated before any transformation). It appears that 0xEB1 and 0xEB2 are provided as balancing values to ensure the checksum is zero
+	* Once end of serial comms message is reached and is valid, execution jumps to 0xFFFF6004. Clearly it is expected that the kernel is loaded to 0xFFFF6000 (with 0xEB1 0xEB2 0x31 0x61 at the start). Executable portion of the kernel should start at 0xFFFF6004.
+	
+  
