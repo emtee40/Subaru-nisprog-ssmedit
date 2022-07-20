@@ -142,11 +142,22 @@ Notes on Operation of Serial Interface on Subaru ECU SH7055 in the ~2002 era
 Serial Comms Bootloader 
 	* Serial comms are established on SCI2 at 9600bps
 	* Access is granted with command 0x4D 0xFF 0xB4. Positive response is 0x4D 0x00 0xB3
-	* Kernel is loaded into RAM with command 0x53 0xA1 0xA2 0xL1 0xL2 0xL3 0xEB1 0xEB2 0x31 0x61 0xED1 0xED2 .... 0xEDn
+	* Kernel is loaded into RAM with command 0x53 0xA1 0xA2 0xL1 0xL2 0xL3 0xEB1 0xEB2 0x31 0x61 0xED1 0xED2 0xED3 0xED4 .... 0xEDn 0xB4
+	     (message byte index)                 0    1    2    3    4    5    6     7     8    9    10    11    12    13
 	* Kernel load address is 0xFF[A1][A2]00. It must be between 0xFFFF6000 and 0xFFFFDFFF. Loaded data starts at 0xEB1
 	* Kernel length is 0x[L1][L2][L3], length is counted from 0xEB1 as the first byte
-	* 0xEBx and 0xEDx are encrypted data which gets transformed by the ECU into unencrypted data 0xDx = 0xEDx ^ 0x55 + 0xF0. Note that 0x31 and 0x61 are not transformed. The encrypted data can be calculated from unencrypted data as per 0xEDx = (0xDx + 0x10) ^ 0x55.
+	* 0xEBx and 0xEDx are encrypted data which gets transformed by the ECU into unencrypted data 0xDx = (0xF0 + 0xEDx) ^ 0x55. Note that 0x31 and 0x61 are not transformed. The encrypted data can be calculated from unencrypted data as per 0xEDx = (0xDx ^ 0x55) + 0x10.
 	* Checksum must equal 0 (checksum is simple byte summation of all bytes in entire command, checksum is calculated before any transformation). It appears that 0xEB1 and 0xEB2 are provided as balancing values to ensure the checksum is zero
 	* Once end of serial comms message is reached and is valid, execution jumps to 0xFFFF6004. Clearly it is expected that the kernel is loaded to 0xFFFF6000 (with 0xEB1 0xEB2 0x31 0x61 at the start). Executable portion of the kernel should start at 0xFFFF6004.
-	
+	* If an error occurs, ECU will reply with 0x66 0x[Response Code] 0x[checksum]
+	* Response codes include:
+		0x01 - special bytes of 0x31 0x61 not found
+		0x02 - SSR register reports RX error
+		0x03 - checksum does not equal 0
+		0x0F - command order incorrect
+		0x21 - unrecognised command
+		0x22 - data received is longer than expected (quantity of bytes sent does not match kernel length)
+		0x23 - address for upload not in RAM
+		0x24 - 0x53 command received before 0x4D command
+		0x25 - message length too short
   
