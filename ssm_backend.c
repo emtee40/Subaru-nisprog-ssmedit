@@ -401,7 +401,7 @@ int sub_sid34_reqdownload(uint32_t dataaddr, uint32_t datalen) {
 
 
 /* For Subaru 02 FXT, transfer payload from *buf
- * len doesn't need to be a multiple of 4 (due to extra termination byte)
+ * len must be multiple of 4 (before termination byte is added)
  * Caller must have encrypted the payload
  * ret 0 if ok
  */
@@ -413,9 +413,11 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 	uint16_t blockno;
 	uint16_t maxblocks;
 
-	
+	len &= ~0x03;
 	if (!buf || !len) return -1;
 
+	len++; // increase length by 1 for the termination byte that ensures checksum = 0
+	
 	maxblocks = (len - 1) >> 7;  // number of 128 byte blocks - 1
 
 	txdata[0]=0x53;
@@ -424,15 +426,16 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 	txdata[3]=(uint8_t) ((len + 4) >> 16) & 0xFF;
 	txdata[4]=(uint8_t) ((len + 4) >> 8) & 0xFF;
 	txdata[5]=(uint8_t) (len + 4) & 0xFF;
-	txdata[6]=(0x00 ^ 0x55) + 0x10;  //this byte should become 0x00 after ECU de-encrypts it
-	txdata[8]=0x31;
-	txdata[9]=0x61;
+	txdata[6]=(uint8_t) ((0x00 ^ 0x55) + 0x10) & 0xFF;  //this byte should become 0x00 after ECU de-encrypts it
+	txdata[7]=(uint8_t) ((0x00 ^ 0x55) + 0x10) & 0xFF;  //this byte should become 0x00 after ECU de-encrypts it
+	txdata[8]=0x31;  //ECU does not de-encrypt this byte
+	txdata[9]=0x61;  //ECU does not de-encrypt this byte
 
 	for(i = 0; i < 10; i++) {
-		if (i != 7) cks = (uint8_t) cks + txdata[i];
+		cks = (uint8_t) cks + txdata[i];
 	}
 
-	txdata[7]=(uint8_t) (0xFF - cks); //to ensure checksum of message incl encrypted data is 0
+	buf[len]=(uint8_t) (0x100 - cks) & 0xFF; //to ensure checksum of message incl encrypted data is 0
 
 	nisreq.data=txdata;
 	nisreq.len=10;
