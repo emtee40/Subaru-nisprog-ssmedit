@@ -401,7 +401,7 @@ int sub_sid34_reqdownload(uint32_t dataaddr, uint32_t datalen) {
 
 
 /* For Subaru 02 FXT, transfer payload from *buf
- * len must be multiple of 4
+ * len doesn't need to be a multiple of 4 (due to extra termination byte)
  * Caller must have encrypted the payload
  * ret 0 if ok
  */
@@ -413,7 +413,7 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 	uint16_t blockno;
 	uint16_t maxblocks;
 
-	len &= ~0x03;
+	
 	if (!buf || !len) return -1;
 
 	maxblocks = (len - 1) >> 7;  // number of 128 byte blocks - 1
@@ -424,12 +424,12 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 	txdata[3]=(uint8_t) ((len + 4) >> 16) & 0xFF;
 	txdata[4]=(uint8_t) ((len + 4) >> 8) & 0xFF;
 	txdata[5]=(uint8_t) (len + 4) & 0xFF;
-	txdata[6]=(0x00 + 0x10) ^ 0x55;  //this byte should become 0x00 after ECU de-encrypts it
+	txdata[6]=(0x00 ^ 0x55) + 0x10;  //this byte should become 0x00 after ECU de-encrypts it
 	txdata[8]=0x31;
 	txdata[9]=0x61;
 
 	for(i = 0; i < 10; i++) {
-		if (i != 7) cks = cks + txdata[i];
+		if (i != 7) cks = (uint8_t) cks + txdata[i];
 	}
 
 	txdata[7]=(uint8_t) (0xFF - cks); //to ensure checksum of message incl encrypted data is 0
@@ -438,7 +438,7 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 	nisreq.len=10;
 	
 	rxmsg=diag_l2_request(global_l2_conn, &nisreq, &errval);
-	if(rxmsg->data[0]=0x53) {
+	if(rxmsg->data[0] == 0x53) {
 		printf("got bad cmd 0x53 response : ");
 		diag_data_dump(stdout, rxmsg->data, rxmsg->len);
 		printf("\n");
@@ -460,7 +460,7 @@ int sub_cmd53_xferdatajump(uint32_t dataaddr, uint8_t *buf, uint32_t len, uint8_
 		}
 
 		rxmsg=diag_l2_request(global_l2_conn, &nisreq, &errval);
-		if(rxmsg->data[0]=0x53) {
+		if(rxmsg->data[0] == 0x53) {
 			printf("got bad cmd 0x53 response : ");
 			diag_data_dump(stdout, rxmsg->data, rxmsg->len);
 			printf("\n");
