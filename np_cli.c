@@ -1271,7 +1271,7 @@ void sub_encrypt_buf(uint8_t *buf, uint32_t len) {
 
 
 /** For Subaru 02 FXT, encrypt buffer in-place
- * @param len (count in bytes) is trimmed to align on 4-byte boundary, i.e. len=7 => len =4
+ * @param len (count in bytes) is not trimmed due to termination byte
  *
  * @return 8-bit checksum of buffer after encryption
  *
@@ -1281,11 +1281,11 @@ static uint8_t sub_encrypt02fxt_buf(uint8_t *buf, uint32_t len) {
 	
 	if (!buf || !len) return 0;
 
-	len &= ~3;
+	
 	cks = 0;
 	
 	for (; len > 0; len--) {
-		buf[len] = (uint8_t) (buf[len] + 0x10) ^ 0x55;
+		buf[len] = (uint8_t) (buf[len] ^ 0x55) + 0x10;
 		cks += buf[len];
 	}
 	
@@ -1403,13 +1403,17 @@ guesskey_found:
 /* Does a complete SID 27 + 34 + 36 + 31 sequence to run the given kernel payload file.
  * Pads the input payload up to multiple of 4 bytes to make SID36 happy
  */
-int cmd_sprunkernel(UNUSED(int argc), UNUSED(char **argv)) {
+int cmd_sprunkernel(int argc, char **argv) {
 	uint32_t file_len, pl_len, load_addr;
 	FILE *fpl;
 	uint8_t *pl_encr;   //encrypted payload buffer
 	uint8_t cks_bypass[4] = { 0x00, 0x00, 0x5A, 0xA5 };  //required checksum
 	struct diag_serial_settings set;
 	int errval;
+
+	if (argc != 2) {
+		return CMD_USAGE;
+	}
 
 	const struct flashdev_t *fdt = nisecu.flashdev;
 	if (!fdt) {
@@ -1569,7 +1573,11 @@ badexit:
 /* Does a complete connection + commands 0x4D and 0x53 to run the given kernel payload file.
  * Pads the input payload up to multiple of 4 bytes 
  */
-int cmd_sprunk02fxt(UNUSED(int argc), UNUSED(char **argv)) {
+int cmd_sprunk02fxt(int argc, char **argv) {
+
+	if (argc != 2) {
+		return CMD_USAGE;
+	}
 
 	if ((npstate != NP_DISC) ||
 		(global_state != STATE_IDLE)) {
@@ -1648,8 +1656,13 @@ int cmd_sprunk02fxt(UNUSED(int argc), UNUSED(char **argv)) {
 	printf("\nturn ignition on and immediately press a key\n");
 	getchar();
 	
-	//placeholder to manage LEC2 pulse and timing
-	//this needs to be done externally for now
+	diag_os_millisleep(500);
+	printf("Set Line End Check 2 to on for 218 milliseconds +/- 10ms\n");   
+	//LEC2 pulse 'on' here
+	//this needs to be done externally
+	diag_os_millisleep(218);
+	printf("Line End Check 2 should now be off (and remain off)\n");   
+	//LEC2 pulse 'off' here
 	
 	/* cmd4D securityAccess */
 	if (sub_cmd4D_unlock()) {
@@ -1657,6 +1670,8 @@ int cmd_sprunk02fxt(UNUSED(int argc), UNUSED(char **argv)) {
 		goto badexit;
 	}
 	printf("\ncmd4D done.\n");
+	
+	diag_os_millisleep(15);  //timegap between 0x4D and 0x53 commands
 	
 	//if no errors, proceed with kernel load
 	
@@ -1699,7 +1714,7 @@ int cmd_sprunk02fxt(UNUSED(int argc), UNUSED(char **argv)) {
 				"Trying anyway, but you might be using an invalid/corrupt file", (unsigned long) pl_len);
 	}
 
-	if (diag_malloc(&pl_encr, pl_len)) {
+	if (diag_malloc(&pl_encr, pl_len + 1)) {  // need an extra byte at the end for termination byte
 		printf("malloc prob\n");
 		fclose(fpl);
 		return CMD_FAILED;
@@ -1718,6 +1733,9 @@ int cmd_sprunk02fxt(UNUSED(int argc), UNUSED(char **argv)) {
 		printf("Using %u (0x0%X) byte payload.\n", file_len, file_len);
 	}
 
+	pl_encr[pl_len] = 0xB3; // termination byte
+	pl_len++;
+	
 	/* encrypt payload */
 	cks = sub_encrypt02fxt_buf(pl_encr, (uint32_t) pl_len);
 
