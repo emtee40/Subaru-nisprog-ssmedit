@@ -1271,7 +1271,7 @@ void sub_encrypt_buf(uint8_t *buf, uint32_t len) {
 
 
 /** For Subaru 02 FXT, encrypt buffer in-place
- * @param len (count in bytes) is not trimmed due to termination byte
+ * @param len (count in bytes) is trimmed to align on 4-byte boundary, i.e. len=7 => len =4
  *
  * @return 8-bit checksum of buffer after encryption
  *
@@ -1280,7 +1280,7 @@ static uint8_t sub_encrypt02fxt_buf(uint8_t *buf, uint32_t len) {
 	uint8_t cks;
 	
 	if (!buf || !len) return 0;
-
+	len &= ~3;
 	
 	cks = 0;
 	
@@ -1714,7 +1714,7 @@ int cmd_sprunk02fxt(int argc, char **argv) {
 				"Trying anyway, but you might be using an invalid/corrupt file", (unsigned long) pl_len);
 	}
 
-	if (diag_malloc(&pl_encr, pl_len + 1)) {  // need an extra byte at the end for termination byte
+	if (diag_malloc(&pl_encr, pl_len + 1)) {  // need to allocate enough space for a termination byte at the end 
 		printf("malloc prob\n");
 		fclose(fpl);
 		return CMD_FAILED;
@@ -1733,9 +1733,6 @@ int cmd_sprunk02fxt(int argc, char **argv) {
 		printf("Using %u (0x0%X) byte payload.\n", file_len, file_len);
 	}
 
-	pl_encr[pl_len] = 0xB3; // termination byte
-	pl_len++;
-	
 	/* encrypt payload */
 	cks = sub_encrypt02fxt_buf(pl_encr, (uint32_t) pl_len);
 
