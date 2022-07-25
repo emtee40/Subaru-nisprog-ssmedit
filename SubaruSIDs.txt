@@ -132,23 +132,23 @@ Notes on Operation of Serial Interface on Subaru ECU SH7055 in the ~2002 era
 - instead, during startup there is a routine to access serial comms bootloader for loading / running a kernel
 - to access the serial comms bootloader, the following needs to occur:
 	* Start with Line End Check 2 (LEC2) low. LEC2 is the bridged pin3/pin6 in the 'Line End Check Connector' which goes to what Subaru calls pin8 on the OBD port.
-	* LEC1 should remain high at all times
+	* LEC1 setting (high or low) does not matter 
 	* Turn ignition to 'on'
-	* Provide sufficient time for ECU to reach the bootloader and reach at least 198ms in the bootloader (approx 500ms after ignition on)
+	* Provide sufficient time for ECU to reach and remain in the bootloader entry function for at least 198ms (this will be approx 500ms after ignition on)
 	* Pulse LEC2 to 'on' for 208-228ms (or for 670-730ms). After this, keep LEC2 low
 	* if these conditions are met, execution jumps into a SCI2 based bootloader
-	* Flashing with ECU is the car is possible. Flashing with the ECU on the bench requires some connections which are not yet determined.
+	* Flashing with ECU is the car is possible. Flashing with the ECU on the bench requires some additional connections which are not yet determined.
 	* Setting LEC2 high while in the bootloader will cause an ECU restart
 	
 Serial Comms Bootloader 
 	* Serial comms are established on SCI2 at 9600bps
-	* Access is granted with command 0x4D 0xFF 0xB4. Positive response is 0x4D 0x00 0xB3. The final byte is the 'termination byte' which ensures the checksum is 0. Termination byte = 0x100 - prior checksum
+	* Access is granted with command 0x4D 0xFF 0xB4. Positive response is 0x4D 0x00 0xB3. The final byte is the 'termination byte' which ensures the checksum is 0. Termination byte = 0x100 - checksum of all bytes except termination byte
 	* Kernel is loaded into RAM with command 0x53 0xA1 0xA2 0xL1 0xL2 0xL3 0xEB1 0xEB2 0x31 0x61 0xED1 0xED2 0xED3 0xED4 .... 0xEDn 0xTB
 	     (message byte index)                 0    1    2    3    4    5    6     7     8    9    10    11    12    13
 	* Kernel load address is 0xFF[A1][A2]00. It must be between 0xFFFF6000 and 0xFFFFDFFF. Loaded data starts at 0xEB1
 	* Kernel length is 0x[L1][L2][L3], length is counted from 0xEB1 as the first byte
 	* 0xEBx and 0xEDx are encrypted data which gets transformed by the ECU into unencrypted data 0xDx = (0xF0 + 0xEDx) ^ 0x55. Note that 0x31 and 0x61 are not transformed. The encrypted data can be calculated from unencrypted data as per 0xEDx = (0xDx ^ 0x55) + 0x10.
-	* 0xTB is the termination byte that ensures the checksum is 0. Checksum is simple byte summation of all bytes in entire command, checksum is calculated before any transformation. 0xTB = 0x100 - checksum of all prior bytes. The purpose of 0xEB1 and 0xEB2 is unknown. Perhaps it would normally contain kernel version number. The value is not used so can be set to 0x00 0x00.
+	* 0xTB is the termination byte that ensures the checksum is 0. Checksum is simple byte summation of all bytes in entire command (except termination byte), checksum is calculated before any transformation. 0xTB = 0x100 - checksum of all prior bytes. The purpose of 0xEB1 and 0xEB2 is unknown. Perhaps it would normally contain kernel version number. The value is not used so can be set to 0x00 0x00.
 	* Once end of serial comms message is reached and is valid, execution jumps to 0xFFFF6004. Clearly it is expected that the kernel is loaded to 0xFFFF6000 (with 0xEB1 0xEB2 0x31 0x61 at the start). Executable portion of the kernel should start at 0xFFFF6004.
 	* If an error occurs, ECU will reply with 0x66 0x[Response Code] 0x[checksum]
 	* Response codes include:
