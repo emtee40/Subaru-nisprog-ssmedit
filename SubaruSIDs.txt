@@ -137,7 +137,7 @@ Notes on Operation of Serial Interface on Subaru ECU SH7055 in the ~2002 era
 	* Provide sufficient time for ECU to reach and remain in the bootloader entry function for at least 198ms (this will be approx 500ms after ignition on)
 	* Pulse LEC2 to 'on' for 208-228ms (or for 670-730ms). After this, keep LEC2 low
 	* if these conditions are met, execution jumps into a SCI2 based bootloader
-	* Flashing with ECU is the car is possible. Flashing with the ECU on the bench requires some additional connections which are not yet determined.
+	* Flashing with ECU in the car is possible. Flashing with the ECU on the bench requires some additional connections which are not yet determined.
 	* Setting LEC2 high while in the bootloader will cause an ECU restart
 	
 Serial Comms Bootloader 
