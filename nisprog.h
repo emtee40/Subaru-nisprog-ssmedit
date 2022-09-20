@@ -58,5 +58,6 @@ int cmd_spconn02fxt(int argc, char **argv);
 int cmd_spconn(int argc, char **argv);
 int cmd_sprunk02fxt(int argc, char **argv);
 int cmd_sprunkernel(int argc, char **argv);
+int cmd_flsubeep(int argc, char **argv);
 
 #endif
