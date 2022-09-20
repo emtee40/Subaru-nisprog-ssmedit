@@ -156,7 +156,7 @@ const struct cmd_tbl_entry np_cmdtable[]=
 	  "\tExample: \"dm asdf.bin 0 0\", specifying start and length as 0 will\n"
 	  "\tdump the entire ROM (must run \"setdev\" first)\n",
 	  cmd_dumpmem, 0, NULL},
-	{ "dm", "dm <file> <start> <#_of_bytes> [eep]", "(see \"dumpmem\")",
+	{ "dm", "dm <file> <start> <#_of_bytes> [eep/subeep]", "(see \"dumpmem\")",
 	  cmd_dumpmem, FLAG_HIDDEN, NULL},
 	{ "flverif", "flverif <file>", "Compare <file> against ROM",
 	  cmd_flverif, 0, NULL},
@@ -168,6 +168,8 @@ const struct cmd_tbl_entry np_cmdtable[]=
 	  "If <orig_rom> is specified, it is used to select which blocks to reflash instead of the normal CRC comparison.\n"
 	  "ex.: \"flrom newrom.bin\"\n",
 	  cmd_flrom, 0, NULL},
+	{ "flsubeep", "flsubeep <file> <start> <#_of_bytes>", "Reflash Subaru EEPROM from <file>. ",
+	  cmd_flsubeep, 0, NULL},
 	{ "npt", "npt [testnum]", "temporary / testing commands. Refer to source code",
 	  cmd_npt, 0, NULL},
 	{ NULL, NULL, NULL, NULL, 0, NULL}
