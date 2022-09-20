@@ -126,7 +126,7 @@ int cmd_npconf(int argc, char **argv) {
 	}
 
 	if (helping) {
-		return CMD_OK;
+		return CMD_USAGE;
 	}
 
 	if (!found) {
@@ -292,7 +292,7 @@ int cmd_setdev(int argc, char **argv) {
 		}
 	}
 	if (helping) {
-		return CMD_OK;
+		return CMD_USAGE;
 	}
 
 	printf("Invalid device, see list with \"setdev ?\"\n");
@@ -2497,12 +2497,22 @@ int cmd_flrom(int argc, char **argv) {
 	}
 	printf("(total: %u)\n", bcnt);
 
+	if (bcnt > (fdt->numblocks / 2)) {
+		printf("\n*********** warning ***********\n"
+				"More than half of the blocks have changes !\n");
+	} else if (block_modified[0]) {
+		printf("\n*********** warning ***********\n"
+				"Block 0 (reset vectors and boot code) is modified. Proceed with care:\n"
+				"flashing incorrect or incomplete data here could brick the ECU !\n");
+	}
+
 	printf("\n\ty : To reflash the blocks listed above, enter 'y'\n"
 	       "\tf : to reflash the whole ROM\n"
 	       "\tp : to do a dry run (practice mode) without modifying ROM contents\n"
 	       "\tn : To abort/cancel, enter 'n'\n");
 
 	char *inp = basic_get_input("> ", stdin);
+
 	bool practice = 1;
 	switch (inp[0]) {
 	case 'y':
