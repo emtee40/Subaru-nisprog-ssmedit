@@ -155,7 +155,7 @@ int cmd_npconf(int argc, char **argv) {
 }
 
 
-/* "dumpmem <file> <start> <len> [eep]" */
+/* "dumpmem <file> <start> <len> [eep/subeep]" */
 int cmd_dumpmem(int argc, char **argv) {
 	u32 start, len;
 	FILE *fpl;
@@ -183,6 +183,12 @@ int cmd_dumpmem(int argc, char **argv) {
 			}
 			if (set_eepr_addr((u32) nparam_eepr.val)) {
 				printf("could not set eep_read() address!\n");
+				return CMD_FAILED;
+			}
+		} else if (strcmp("subeep", argv[4]) == 0) {
+			eep = 2;
+			if (npstate != NP_NPKCONN) {
+				printf("Kernel must be running for reading EEPROM. Try \"sprunkernel\"\n");
 				return CMD_FAILED;
 			}
 		} else {
@@ -2119,7 +2125,7 @@ static int npk_dump(FILE *fpl, uint32_t start, uint32_t len, bool eep) {
 		ram = 1;
 	}
 
-	if (ram && eep) {
+	if (ram && ((eep == 1) || (eep == 2))) {
 		printf("bad args\n");
 		return -1;
 	}
@@ -2135,7 +2141,9 @@ static int npk_dump(FILE *fpl, uint32_t start, uint32_t len, bool eep) {
 	uint32_t len_done = 0;  //total data written to file
 
 	txdata[0] = SID_DUMP;
-	txdata[1] = eep? SID_DUMP_EEPROM : SID_DUMP_ROM;
+	if (eep == 1) txdata[1] = 0;
+	else if (eep == 2) txdata[1] = 2;
+	else txdata[1] = 1;
 #define NP10_MAXBLKS    8   //# of blocks to request per loop. Too high might flood us
 	nisreq.len = 6;
 
@@ -2221,6 +2229,47 @@ badexit:
 	fclose(fpl);
 	return -1;
 }
+
+
+/* reflash subaru ECU EEPROM 
+ * usage: flsubeep <filename> <start> <len>
+ */
+int cmd_flsubeep(int argc, char **argv) {
+
+	uint8_t *newdata;  //flash data will be copied in this
+	uint32_t start, len;	
+
+	if (argc != 4) {
+		return CMD_USAGE;
+	}
+
+	if (npstate != NP_NPKCONN) {
+		printf("kernel not initialized - try \"runkernel\" or \"initk\"\n");
+		return CMD_FAILED;
+	}
+
+	len = htoi(argv[3]);
+	start = htoi(argv[2]);
+	newdata = load_rom(argv[1], len);
+
+	if (!newdata) return CMD_FAILED;
+
+	if (npkern_init()) {
+		printf("npk init failed\n");
+		goto badexit;
+	}
+
+	if (npk_flsubeep(newdata, start, len) == CMD_OK) {
+		printf("EEPROM flash complete.\n");
+		free(newdata);
+		return CMD_OK;
+	}
+
+badexit:
+	free(newdata);
+	return CMD_FAILED;
+}
+
 
 
 /* reflash a given block !
