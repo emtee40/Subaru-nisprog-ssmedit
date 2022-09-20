@@ -85,4 +85,9 @@ int set_kernel_speed(uint16_t kspeed);
  */
 const char *get_npk_id(void);
 
+/** flash subaru ECU EEPROM
+ *
+ */
+int npk_flsubeep(const uint8_t *src, uint32_t start, uint32_t len);
+
 #endif
