@@ -301,6 +301,104 @@ static uint8_t cks_add8(uint8_t *data, unsigned len) {
 }
 
 
+/* ret 0 if ok. For use by cmd_flsubeep
+ * assumes parameters have been validated
+ * 
+ */
+
+int npk_flsubeep(const uint8_t *src, uint32_t start, uint32_t len) {
+
+	/* program 128-byte chunks */
+	uint32_t remain = len;
+
+	uint8_t txdata[134];	//data for nisreq
+	struct diag_msg nisreq={0};	//request to send
+	int errval;
+	nisreq.data = txdata;
+
+	unsigned long t0, chrono;
+
+	if ((len & (128 - 1)) ||
+		(start & (128 - 1))) {
+		printf("error: misaligned start / length ! \n");
+		return -1;
+	}
+
+	txdata[0]=SID_FLASH;
+	txdata[1]=SIDFL_SUBEEP;
+	nisreq.len = 134;	//2 (header) + 3 (addr) + 128 (payload) + 1 (extra CRC)
+
+	t0 = diag_os_getms();
+
+
+	while (remain) {
+		uint8_t rxbuf[10];
+		unsigned curspeed, tleft;
+
+		chrono = diag_os_getms() - t0;
+		if (!chrono) chrono += 1;
+		curspeed = 1000 * (len - remain) / chrono;	//avg B/s
+		if (!curspeed) curspeed += 1;
+		tleft = remain / curspeed;	//s
+		if (tleft > 9999) tleft = 9999;
+
+		printf("\rwriting chunk @ 0x%06X (%3u %%, %5u B/s, ~ %4u s remaining)", start, (unsigned) 100 * (len - remain) / len,
+				curspeed, tleft);
+		fflush(stdout);
+
+		txdata[2] = start >> 16;
+		txdata[3] = start >> 8;
+		txdata[4] = start >> 0;
+		memcpy(&txdata[5], src, 128);
+		txdata[133] = cks_add8(&txdata[2], 131);
+
+		errval = diag_l2_send(global_l2_conn, &nisreq);
+		if (errval) {
+			printf("l2_send error!\n");
+			return -1;
+		}
+
+		/* expect exactly 3 bytes, but with generous timeout */
+		//rxmsg = diag_l2_request(global_l2_conn, &nisreq, &errval);
+		errval = diag_l1_recv(global_l2_conn->diag_link->l2_dl0d, rxbuf, 3, 800);
+		if (errval <= 1) {
+			printf("\n\tProblem: no response @ %X\n", (unsigned) start);
+			(void) diag_l2_ioctl(global_l2_conn, DIAG_IOCTL_IFLUSH, NULL);
+			return -1;
+		}
+		if (errval < 3) {
+			printf("\n\tProblem: incomplete response @ %X\n", (unsigned) start);
+			(void) diag_l2_ioctl(global_l2_conn, DIAG_IOCTL_IFLUSH, NULL);
+			diag_data_dump(stdout, rxbuf, errval);
+			printf("\n");
+			return -1;
+		}
+
+		if (rxbuf[1] != (SID_FLASH + 0x40)) {
+			//maybe negative response, if so, get the remaining packet
+			printf("\n\tProblem: bad response @ %X: ", (unsigned) start);
+
+			int needed = 1 + rxbuf[0] - errval;
+			if (needed > 0) {
+				errval = diag_l1_recv(global_l2_conn->diag_link->l2_dl0d, &rxbuf[errval], needed, 300);
+			}
+			if (errval < 0) errval = 0;	//floor
+			printf("%s\n", decode_nrc(&rxbuf[1]));
+			(void) diag_l2_ioctl(global_l2_conn, DIAG_IOCTL_IFLUSH, NULL);
+			return -1;
+		}
+
+		remain -= 128;
+		start += 128;
+		src += 128;
+
+	}	//while len
+	printf("\nWrite complete.\n");
+
+	return 0;
+}
+
+
 /* ret 0 if ok. For use by reflash_block(),
  * assumes parameters have been validated,
  * and appropriate block has been erased
